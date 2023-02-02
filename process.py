@@ -43,7 +43,7 @@ def by_category_comparison():
                     height_factor=1/2,
                     width_factor=1/2)
 
-def chairpersons():
+def chairpersons_comparison():
     logger.info("runnign chairperson graph")
     d = Path(config['input_dir']) / "older meetings"
     def foo(x):
@@ -90,5 +90,5 @@ def split_chairperson():
 
 def main():
     split_chairperson()
-    chairpersons()
+    chairpersons_comparison()
     by_category_comparison()
