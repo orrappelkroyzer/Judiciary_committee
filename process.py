@@ -1,12 +1,12 @@
 import pandas as pd
 import sys
 from pathlib import Path
-local_python_path = str(Path(__file__).parents[1])
+local_python_path = str(Path(__file__).parents[0])
 if local_python_path not in sys.path:
    sys.path.append(local_python_path)
 from utils.utils import load_config, get_logger
 logger = get_logger(__name__)
-config = load_config(add_date=False)
+config = load_config(config_path=Path(local_python_path) / "config.json")
 import plotly.express as px
 from utils.plotly_utils import fix_and_write
 
@@ -86,7 +86,28 @@ def split_chairperson():
     df1['chairman_segment'] = (t.shift(1, fill_value=t.head(1)) != t).cumsum()
     df1['chairman_segment'] = df1['chairman_segment'].ffill()
     df1['chairman'] = df1['chairman_segment'].replace(df1.groupby('chairman_segment')['name'].first().to_dict())
-    df1.to_excel("21.1.23_processed.xlsx")
+    d.mkdir(parents=True, exist_ok=True)
+    df1.to_excel(d / "22.1.23_processed.xlsx")
+ 
+def analyze_speakers():
+    logger.info("analyzing by speaker")
+    d = Path(config['input_dir']) / "older meetings"
+    def foo(x):
+        meeting_date = x.stem[:-10]
+        df = pd.read_excel(x)
+        df['length'] = df.text.apply(lambda x: len(x.split()))
+        df = df.join(df.groupby('chairman')['length'].sum().rename('total_length'), on='chairman')
+        df = df.groupby(['name', 'chairman'])\
+            .agg({'length' : 'sum', 'total_length' : 'first'})\
+                .reset_index()\
+                    .assign(meeting_date=meeting_date)\
+                        .rename(columns={'name' : 'שם דובר', 'chairman' : 'יו"ר', 'meeting_date' : 'תאריך הישיבה'})         
+        df['אחוז השתתפות'] = 100*df['length']/df['total_length']
+        return df.rename(columns={'length' : "מס' מלים"}).drop(columns='total_length')
+    df = pd.concat([foo(x) for x in d.glob("*_processed.xlsx")])
+    fn = config['output_dir'] / 'speaker_in_meeting_by_chairperson.xlsx'
+    logger.info(f"writing to {fn}")
+    df.to_excel(fn)
 
 def main():
     split_chairperson()
