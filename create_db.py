@@ -18,11 +18,16 @@ categories = ['יו״ר הוועדה', 'יו״ר וועדה חלופי', 'שר �
 
 force=True
 
+
+ZION_BEMISHPAT = "Zion Bemishpat" 
+NATION_LAW = "Nation law"
+law = NATION_LAW
+
 def analyze_speakers():
     logger.info("analyzing by speaker")
-    tagging =pd.read_excel(Path(config['input_dir'])  / "speaker tagging.xlsx").set_index('שם דובר')['קטגוריה']
-    fn = Path(config['input_dir']) / 'speaker_in_meeting_by_chairperson.xlsx'
-    d = Path(config['input_dir']) / "processed_by_chairperson"
+    tagging =pd.read_excel(Path(config['input_dir'])  / law / "speaker tagging.xlsx").set_index('שם דובר')['קטגוריה']
+    fn = Path(config['input_dir']) / law / 'speaker_in_meeting_by_chairperson.xlsx'
+    d = Path(config['input_dir']) / law / "processed_by_chairperson"
     if not fn.exists() or force:
         def ananlyze_by_speaker_and_chairman(x):
             meeting_date = x.stem
@@ -43,7 +48,7 @@ def analyze_speakers():
         logger.info(f"writing to {fn}")
         df.to_excel(fn, index=False)
 
-    fn = Path(config['input_dir']) / 'speaker_in_meeting.xlsx'
+    fn = Path(config['input_dir']) / law / 'speaker_in_meeting.xlsx'
     if not fn.exists() or force:
         def ananlyze_by_speaker(x):
             meeting_date = x.stem
@@ -71,8 +76,8 @@ def analyze_speakers():
 
 def split_by_chairperson():
     logger.info("extracting chairperson")
-    source_dir = Path(config['input_dir']) / "processed"
-    target_dir = Path(config['input_dir']) / "processed_by_chairperson"
+    source_dir = Path(config['input_dir']) / law / "processed"
+    target_dir = Path(config['input_dir']) / law / "processed_by_chairperson"
     target_dir.mkdir(parents=True, exist_ok=True)
     for x in source_dir.glob("*.xlsx"):
         name = x.stem
@@ -83,36 +88,56 @@ def split_by_chairperson():
         df['chairman_segment'] = (t.shift(1, fill_value=t.head(1)) != t).cumsum()
         df['chairman_segment'] = df['chairman_segment'].ffill()
         df['chairman'] = df['chairman_segment'].replace(df.groupby('chairman_segment')['name'].first().to_dict())
-        df.to_excel(target_dir /f'{name}.xlsx')
+        df.to_excel(target_dir /f'{name}.xlsx', index=False)
+
+
 
 def process_formal_protocol():
     logger.info("porocessing formal protocol")
-    speaker_pat = re.compile(r'<< \w+ >> (.+?): << \w+ >>', re.UNICODE|re.MULTILINE) # for files=7? check if regex works better
-    folder = Path(config['input_dir']) / 'formal_protocol'
-    target_folder = Path(config['input_dir']) / 'processed'
+    
+    
+    folder = Path(config['input_dir']) / law / 'formal_protocol'
+    target_folder = Path(config['input_dir']) / law / 'processed'
+    target_folder.mkdir(parents=True, exist_ok=True)
     for filename in folder.glob('*.txt'):
         logger.info(f"working on {filename}")
         name = filename.stem
+        if law == ZION_BEMISHPAT:
+            speaker_pat = re.compile(r'<< \w+ >> (.+?): << \w+ >>', re.UNICODE|re.MULTILINE) # for files=7? check if regex works better
+        elif law == NATION_LAW:
+            if name == '20180712':
+                speaker_pat = re.compile(r'<< \w+ >> (.+?): << \w+ >>', re.UNICODE|re.MULTILINE) # for files=7? check if regex works better
+            else:
+                speaker_pat = re.compile(r'\n(.*):\n', re.UNICODE|re.MULTILINE)
+        else:
+            assert False
+        
+        
         if  (target_folder /f'{name}.xlsx').exists() and not force:
+            logger.info("File exists, ignoring")
             continue
         else:
             text_file = open(filename, "r", encoding= 'utf8')
             txt = text_file.read()
             text_file.close() 
+            if law == NATION_LAW:
+                reg = "הצעת חוק\-יסוד: ישראל \– מדינת הלאום של העם היהודי"
+                txt = re.split(reg, txt)[-1]
             speaker_text = re.split(speaker_pat, txt)
             speakers = []
             texts = []
             for i in range(1, int(len(speaker_text)/2)+1):
                 texts.append(speaker_text[i*2])
-                speakers.append(speaker_text[i*2-1])
+                speakers.append(speaker_text[i*2-1].strip())
             df = pd.DataFrame(data={'file':name,'name':speakers,'text':texts})
             df.text = df.text.apply(lambda x: x.replace("\n",''))
             df.text = df.text.apply(lambda x: x.replace("-",''))
             logger.info(f"writing to {target_folder} / {name}.xlsx'")
-            df.to_excel(target_folder /f'{name}.xlsx')
+            df.to_excel(target_folder /f'{name}.xlsx', index=False)
 
 def process_whisper():
     speaker_pat = re.compile(r"([^\n]+)\n([^\n]+)\n\n+", re.UNICODE|re.MULTILINE)
+
 
 def main():
     process_formal_protocol()
