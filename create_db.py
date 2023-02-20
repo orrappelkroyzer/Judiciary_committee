@@ -13,6 +13,9 @@ import numpy as np
 import plotly.graph_objects as go
 import re
 import plotly
+from datetime import timedelta
+from pydub import AudioSegment
+from moviepy.editor import VideoFileClip
 categories = ['יו״ר הוועדה', 'יו״ר וועדה חלופי', 'שר המשפטים', 'ח״כ הקואליציה', 'מומחה תומך', 'ח״כ האופוזיציה', 'מומחה מתנגד',
               'מנהל הועדה', 'יועמ"ש הכנסת', 'יועמ״ש הוועדה', 'עובד ציבור',  'דובר לא ידוע']
 
@@ -21,56 +24,56 @@ force=True
 
 ZION_BEMISHPAT = "Zion Bemishpat" 
 NATION_LAW = "Nation law"
-law = NATION_LAW
+law = ZION_BEMISHPAT
 
 def analyze_speakers():
     logger.info("analyzing by speaker")
     tagging =pd.read_excel(Path(config['input_dir'])  / law / "speaker tagging.xlsx").set_index('שם דובר')['קטגוריה']
     fn = Path(config['input_dir']) / law / 'speaker_in_meeting_by_chairperson.xlsx'
     d = Path(config['input_dir']) / law / "processed_by_chairperson"
-    if not fn.exists() or force:
-        def ananlyze_by_speaker_and_chairman(x):
-            meeting_date = x.stem
-            df = pd.read_excel(x)
-            df['length'] = df.text.apply(lambda x: len(x.split()))
-            df = df.join(df.groupby('chairman')['length'].sum().rename('total_length'), on='chairman')
-            t1 = df.groupby(['name', 'chairman'])\
-                .agg({'length' : 'sum', 'total_length' : 'first'})\
-                    .reset_index()\
-                        .assign(meeting_date=meeting_date)
-            t1['אחוז השתתפות בישיבה לפי חתך יו"ר'] = 100*t1['length']/t1['total_length']
-            t1 = t1.drop(columns='total_length').rename(columns={'length' : "מס' מלים לפי חתך יור"})                         
-            return t1
-        df = pd.concat([ananlyze_by_speaker_and_chairman(x) for x in d.glob("*.xlsx")])\
-            .rename(columns={'name' : 'שם דובר', 'chairman' : 'יו"ר', 'meeting_date' : 'תאריך הישיבה'})\
-                .merge(tagging, on='שם דובר', how='left')
-        df.reset_index(inplace=True)   
-        logger.info(f"writing to {fn}")
-        df.to_excel(fn, index=False)
+    
+    def ananlyze_by_speaker_and_chairman(x):
+        meeting_date = x.stem
+        df = pd.read_excel(x)
+        df['length'] = df.text.apply(lambda x: len(x.split()))
+        df = df.join(df.groupby('chairman')['length'].sum().rename('total_length'), on='chairman')
+        t1 = df.groupby(['name', 'chairman'])\
+            .agg({'length' : 'sum', 'total_length' : 'first'})\
+                .reset_index()\
+                    .assign(meeting_date=meeting_date)
+        t1['אחוז השתתפות בישיבה לפי חתך יו"ר'] = 100*t1['length']/t1['total_length']
+        t1 = t1.drop(columns='total_length').rename(columns={'length' : "מס' מלים לפי חתך יור"})                         
+        return t1
+    df = pd.concat([ananlyze_by_speaker_and_chairman(x) for x in d.glob("*.xlsx")])\
+        .rename(columns={'name' : 'שם דובר', 'chairman' : 'יו"ר', 'meeting_date' : 'תאריך הישיבה'})\
+            .merge(tagging, on='שם דובר', how='left')
+    df.reset_index(inplace=True)   
+    logger.info(f"writing to {fn}")
+    df.to_excel(fn, index=False)
 
     fn = Path(config['input_dir']) / law / 'speaker_in_meeting.xlsx'
-    if not fn.exists() or force:
-        def ananlyze_by_speaker(x):
-            meeting_date = x.stem
-            df = pd.read_excel(x)
-            df['length'] = df.text.apply(lambda x: len(x.split()))
-            df['אורך קטע לא מופרע מקסימלי'] = df['length']
-            df['ממוצע אורך קטע לא מופרע'] = df['length']
-            t2 = df.groupby('name')\
-                .agg({'length' : 'sum', 'אורך קטע לא מופרע מקסימלי' : 'max', 'ממוצע אורך קטע לא מופרע' : 'mean'})\
-                    .reset_index()\
-                        .assign(meeting_date=meeting_date)
-            t2['אחוז השתתפות בישיבה'] = 100*t2['length']/t2.length.sum()
-            t2 = t2.rename(columns={'length' : "מס' מלים"})                         
-            return t2
-        df = pd.concat([ananlyze_by_speaker(x) for x in d.glob("*.xlsx")])\
-            .rename(columns={'name' : 'שם דובר', 'chairman' : 'יו"ר', 'meeting_date' : 'תאריך הישיבה'})\
-                .merge(tagging, on='שם דובר', how='left')
-        df.reset_index(inplace=True) 
-        df['שם דובר'] = df['שם דובר'].apply(lambda x: x.split(" (")[0])
-        logger.info(f"writing to {fn}")
-        df.to_excel(fn, index=False)
-        
+    
+    def ananlyze_by_speaker(x):
+        meeting_date = x.stem
+        df = pd.read_excel(x)
+        df['length'] = df.text.apply(lambda x: len(x.split()))
+        df['אורך קטע לא מופרע מקסימלי'] = df['length']
+        df['ממוצע אורך קטע לא מופרע'] = df['length']
+        t2 = df.groupby('name')\
+            .agg({'length' : 'sum', 'אורך קטע לא מופרע מקסימלי' : 'max', 'ממוצע אורך קטע לא מופרע' : 'mean'})\
+                .reset_index()\
+                    .assign(meeting_date=meeting_date)
+        t2['אחוז השתתפות בישיבה'] = 100*t2['length']/t2.length.sum()
+        t2 = t2.rename(columns={'length' : "מס' מלים"})                         
+        return t2
+    df = pd.concat([ananlyze_by_speaker(x) for x in d.glob("*.xlsx")])\
+        .rename(columns={'name' : 'שם דובר', 'chairman' : 'יו"ר', 'meeting_date' : 'תאריך הישיבה'})\
+            .merge(tagging, on='שם דובר', how='left')
+    df.reset_index(inplace=True) 
+    df['שם דובר'] = df['שם דובר'].apply(lambda x: x.split(" (")[0])
+    logger.info(f"writing to {fn}")
+    df.to_excel(fn, index=False)
+    
         
     return
 
@@ -133,16 +136,61 @@ def process_formal_protocol():
             df.text = df.text.apply(lambda x: x.replace("\n",''))
             df.text = df.text.apply(lambda x: x.replace("-",''))
             logger.info(f"writing to {target_folder} / {name}.xlsx'")
-            df.to_excel(target_folder /f'{name}.xlsx', index=False)
+            df.to_excel(target_folder /f'{name}.xlsx', index=False, engine='xlsxwriter')
 
 def process_whisper():
     speaker_pat = re.compile(r"([^\n]+)\n([^\n]+)\n\n+", re.UNICODE|re.MULTILINE)
 
+def mp42wav():
+    folder = Path(r"C:\Users\orkro\Desktop\audio")
+    for mp3 in folder.glob("*.mp4"):
+        wav = mp3.parent / f"{mp3.stem}.wav"
+        logger.info(f"translating {mp3} to {wav}")
+        if wav.exists() and not force:
+            logger.info(f"{wav} exists, skipping")
+            continue
+        
+        clip = VideoFileClip(str(mp3))
+        clip.audio.write_audiofile(wav)
 
+def mp32wav():
+    folder = Path(r"C:\Users\orkro\Desktop\audio")
+    for mp3 in folder.glob("*.mp3"):
+        wav = mp3.parent / f"{mp3.stem}.wav"
+        logger.info(f"translating {mp3} to {wav}")
+        if wav.exists() and not force:
+            logger.info(f"{wav} exists, skipping")
+            continue
+        
+        sound = AudioSegment.from_mp3(mp3)
+        sound.export(wav, format="wav")
+
+
+
+def process_diarization():
+    folder = Path(config['input_dir']) / law / 'rttm'
+    dfs = []
+    for fn in folder.glob("*.rttm"):
+        logger.info(f"working on {fn.stem}")
+        df = pd.read_csv(fn, sep=" ", header=None, \
+            names=["Type", "File ID", "Channel ID", "Turn Onset", "Turn Duration", "Orthography Field", "Speaker Type", "Speaker Name", "Confidence Score", "Signal Lookahead Time"])
+        df['זמן התחלה'] = df['Turn Onset'].apply(lambda x: f"{int(x/3600):02}:{int(x/60)%60:02}:{int(x%60):02}")
+        
+        df = df[['File ID', "Speaker Name", 'זמן התחלה', "Turn Duration"]].rename(columns={'File ID' : 'תאריך', "Speaker Name" : 'שם דובר',  "Turn Duration" : 'משך'})
+        df.index.name = 'אינדקס'
+        df.to_excel(Path(config['input_dir']) / law / 'processed_audio' / f"{fn.stem}.xlsx")
+        df.groupby('שם דובר')['משך'].sum().sort_values(ascending=False).reset_index().to_excel(Path(config['input_dir']) / law / 'processed_audio' / f"{fn.stem}_distribution.xlsx")
+        dfs += [df]
+    pd.concat(dfs).reset_index().rename(columns={'index' : 'אינדקס בתוך הישיבה'}).to_excel(Path(config['input_dir']) / law / 'processed_audio' / "all_meetings.xlsx")
+    
+    
 def main():
     process_formal_protocol()
     split_by_chairperson()
     analyze_speakers()
+    # mp32wav()
+    # mp42wav()
+    # process_diarization()
 
 if __name__ == "__main__":             
     main()

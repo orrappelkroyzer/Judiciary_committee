@@ -18,7 +18,7 @@ from datetime import date
 
 ZION_BEMISHPAT = "Zion Bemishpat" 
 NATION_LAW = "Nation law"
-law = NATION_LAW
+law = ZION_BEMISHPAT
 
 categories = ['יו״ר הוועדה', 'יו״ר וועדה חלופי', 'שר המשפטים', 'ח״כ הקואליציה', 'מומחה תומך', 'ח״כ האופוזיציה', 'מומחה מתנגד',
               'מנהל הועדה', 'יועמ"ש הכנסת', 'יועמ״ש הוועדה', 'עובד ציבור',  'דובר לא ידוע']
@@ -48,10 +48,10 @@ def by_category_comparison(df):
     logger.info("runnign conmapison by category")
     
     if law == ZION_BEMISHPAT:
-        df.loc[~df['תאריך הישיבה'].isin(['22.1.23', '23.1.23', '30.1.23']), 'ימי דיונים'] = '11-18.1'
-        df.loc[df['תאריך הישיבה'].isin(['22.1.23', '23.1.23', '30.1.23']), 'ימי דיונים'] = '22-23.1'
+        df.loc[~df['תאריך הישיבה'].between('230122', '230130'), 'ימי דיונים'] = 'בנוכחות האופוזיציה'
+        df.loc[df['תאריך הישיבה'].between('230122', '230130'), 'ימי דיונים'] = 'בהחרמת האופוזיציה'
         df1 = df.assign(**{'ימי דיונים' : 'כל הישיבות'})
-        df = [df, df1]
+        df = pd.concat([df, df1])
         t_colors=colors
     else:
         df['ימי דיונים'] = 'כל הישיבות'
@@ -72,28 +72,53 @@ def by_category_comparison(df):
         ]
     df = df.join(pd.Series(len(categories), index=categories, name='category order'), on='קטגוריה')
     df = df.sort_values('קטגוריה', ascending=True)
-    fig = px.pie(df.reset_index(), 
-                 values="מס' מלים",  
-                 names="קטגוריה", 
-                 title="אחוז ההשתפות לפי קטגוריה", 
-                #  facet_col='ימי דיונים', 
-                #  facet_col_spacing=0.15,
-                 color_discrete_sequence=colors,
-                 category_orders={'קטגוריה' : categories})
-    fig.update_traces(textfont_size=25)
-    fig.update_layout(legend={#'traceorder' : 'reversed',
-                              'font' : {'size' : 25}},
-                             # 'orientation' : "h",
-                            #   'entrywidth' : 0.2, # change it to 0.3
-                            #   'entrywidthmode' : 'fraction',
-                            #   'xanchor' : 'center', 'yanchor' : 'bottom', 'x' : 0.5, 'y' : 0},
-                      title_font={'size' : 25})
+    if law == NATION_LAW:
+        fig = px.pie(df.reset_index(), 
+                    values="מס' מלים",  
+                    names="קטגוריה", 
+                    title="אחוז ההשתפות לפי קטגוריה", 
+                    #  facet_col='ימי דיונים', 
+                    #  facet_col_spacing=0.15,
+                    color_discrete_sequence=colors,
+                    category_orders={'קטגוריה' : categories})
+        fig.update_traces(textfont_size=25)
+        fig.update_layout(legend={#'traceorder' : 'reversed',
+                                'font' : {'size' : 25}},
+                                # 'orientation' : "h",
+                                #   'entrywidth' : 0.2, # change it to 0.3
+                                #   'entrywidthmode' : 'fraction',
+                                #   'xanchor' : 'center', 'yanchor' : 'bottom', 'x' : 0.5, 'y' : 0},
+                        title_font={'size' : 25})
 
-    fix_and_write(fig=fig,
-                    filename="by_categories_comparison",
-                    output_dir=config['output_dir'] / law)
-                    #height_factor=0.75,
-                    # width_factor=0.9)
+        fix_and_write(fig=fig,
+                        filename="by_categories_comparison",
+                        output_dir=config['output_dir'] / law)
+                        #height_factor=0.75,
+                        # width_factor=0.9)
+    else:
+        fig = px.pie(df.reset_index(), 
+                    values="מס' מלים",  
+                    names="קטגוריה", 
+                    title="אחוז ההשתפות לפי קטגוריה", 
+                    facet_col='ימי דיונים', 
+                    facet_col_spacing=0.15,
+                    color_discrete_sequence=colors,
+                    category_orders={'קטגוריה' : categories})
+        fig.update_traces(textfont_size=25)
+        fig.update_layout(legend={'traceorder' : 'reversed',
+                                'font' : {'size' : 25},
+                                'orientation' : "h",
+                                'entrywidth' : 0.2, # change it to 0.3
+                                'entrywidthmode' : 'fraction',
+                                'xanchor' : 'center', 'yanchor' : 'bottom', 'x' : 0.5, 'y' : 0},
+                        title_font={'size' : 25})
+
+        fix_and_write(fig=fig,
+                        filename="by_categories_comparison",
+                        output_dir=config['output_dir'] / law,
+                        height_factor=0.75,
+                        width_factor=0.9)
+
 
 def chairpersons_comparison():
     logger.info("runnign chairperson graph")
@@ -108,15 +133,18 @@ def chairpersons_comparison():
                 .rename('אחוז מסך המלים בפרוטוקול'))\
                     .reset_index()\
                         .assign(meeting_date=meeting_date)
-    by_chairman = pd.concat([foo(x) for x in d.glob("*.xlsx") if date.fromisoformat(f"{x.stem[:4]}-{x.stem[4:6]}-{x.stem[6:8]}") <= date(2018,3,30)])
+    if law == NATION_LAW:
+        by_chairman = pd.concat([foo(x) for x in d.glob("*.xlsx") if date.fromisoformat(f"{x.stem[:4]}-{x.stem[4:6]}-{x.stem[6:8]}") <= date(2018,3,30)])
+    else:
+        by_chairman = pd.concat([foo(x) for x in d.glob("*.xlsx")])
     by_chairman['meeting_date'] = by_chairman['meeting_date'].str.replace('afternoon', 'אחה"צ')
     by_chairman = by_chairman.rename(columns={'meeting_date' : 'תאריך הישיבה'})
     by_chairman['יו"ר, תאריך הישיבה'] = by_chairman['chairman'] + ", " + by_chairman['תאריך הישיבה']
     by_chairman = by_chairman.rename(columns={'chairman' : 'יו"ר'})
-    if law == ZION_BEMISHPAT:
-        by_chairman['day'] = by_chairman['תאריך הישיבה'].apply(lambda x: int(x.split(".")[0]))
-    else:
-        by_chairman['day'] = by_chairman['תאריך הישיבה']
+    # if law == ZION_BEMISHPAT:
+    #     by_chairman['day'] = by_chairman['תאריך הישיבה'].apply(lambda x: int(x.split(".")[0]))
+    # else:
+    #     by_chairman['day'] = by_chairman['תאריך הישיבה']
     t = by_chairman.sort_values('אחוז מסך המלים בפרוטוקול', ascending=True)
     fig = px.bar(t, y='יו"ר, תאריך הישיבה', x='אחוז מסך המלים בפרוטוקול', 
                  title=f'שיעור השתתפות של היו"ר (בחלק הישיבה בה כיהן כיו"ר) בפרוטוקול ועדת חוקה', 
@@ -137,6 +165,7 @@ def chairpersons_comparison():
 def speaker_comparison(df):
     for meeting_date in df['תאריך הישיבה'].unique():
         t_colors = colors#[len(colors)-df[df['תאריך הישיבה'] == meeting_date]['קטגוריה'].nunique():]
+        
         fig = px.bar(df[df['תאריך הישיבה'] == meeting_date].sort_values('אחוז השתתפות בישיבה', ascending=False), 
                      y='שם דובר', 
                      x='אחוז השתתפות בישיבה', 
@@ -148,7 +177,8 @@ def speaker_comparison(df):
         fig.update_layout(legend={'traceorder' : 'reversed', 
                                   'xanchor' : 'right', 'yanchor' : 'top', 'y' : 0.93})
         (config['output_dir'] / law /  "by_meeting" / "num_minutes").mkdir(parents=True, exist_ok=True)
-        
+        df[df['תאריך הישיבה'] == meeting_date].sort_values('אחוז השתתפות בישיבה', ascending=False)\
+            .to_excel(config['output_dir'] / law /  "by_meeting" / "num_minutes" / f"{meeting_date}.xlsx")
         fix_and_write(fig=fig,
                     filename=meeting_date,
                     height_factor=1.5,
@@ -181,7 +211,7 @@ def speaker_comparison(df):
                                   'xanchor' : 'right', 'yanchor' : 'top', 'y' : 0.93})
         (config['output_dir'] / law / "by_meeting" / "mean_segment").mkdir(parents=True, exist_ok=True)
         fix_and_write(fig=fig,
-                    filename=f"meeting_date",
+                    filename=f"{meeting_date}",
                     height_factor=1.5,
                     output_dir=config['output_dir'] / law / "by_meeting" / "mean_segment")
 
@@ -256,12 +286,14 @@ def read_db():
 def main():
     
     speaker_in_meeting_by_chairperson, speaker_in_meeting = read_db()
-    speaker_in_meeting = speaker_in_meeting[
-        speaker_in_meeting['תאריך הישיבה'].apply(lambda x: date.fromisoformat(f"{x[:4]}-{x[4:6]}-{x[6:8]}")) <= date(2018,3,30)]
+    if law == NATION_LAW:
+        speaker_in_meeting = speaker_in_meeting[
+            speaker_in_meeting['תאריך הישיבה'].apply(lambda x: date.fromisoformat(f"{x[:4]}-{x[4:6]}-{x[6:8]}")) <= date(2018,3,30)]
     logger.info(speaker_in_meeting)
     speaker_comparison(speaker_in_meeting)
     by_category_comparison(speaker_in_meeting)
     chairpersons_comparison()
+    chairman_averages(speaker_in_meeting_by_chairperson)
     
 
 if __name__ == "__main__":             
